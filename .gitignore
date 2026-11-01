@@ -42,3 +42,8 @@ node_modules/
 audio_files/
 recordings/
 recordings.json
+
+# Android signing — never commit these
+android/key.properties
+android/app/release.jks
+android/app/*.jks

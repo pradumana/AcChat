@@ -1,0 +1,122 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]          # also runs the release job on version tags
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # DEBUG APK — runs on every push / PR to main
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-debug:
+    name: Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.2"
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: acchat-debug-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # RELEASE APK — only runs when you push a tag like v1.0.0
+  #
+  # Required GitHub Secrets (Settings → Secrets and variables → Actions):
+  #
+  #   KEYSTORE_BASE64   base64-encoded .jks keystore
+  #                     Generate:
+  #                       keytool -genkey -v -keystore release.jks \
+  #                         -alias acchat -keyalg RSA -keysize 2048 -validity 10000
+  #                     Encode (Linux/macOS):
+  #                       base64 -w 0 release.jks
+  #                     Encode (Windows PowerShell):
+  #                       [Convert]::ToBase64String([IO.File]::ReadAllBytes("release.jks"))
+  #
+  #   KEY_ALIAS         the alias used above, e.g. acchat
+  #   KEY_PASSWORD      key password
+  #   STORE_PASSWORD    keystore password
+  #
+  # Trigger a release build:
+  #   git tag v1.0.0 && git push origin v1.0.0
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-release:
+    name: Release APK
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.2"
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.jks
+
+      - name: Write key.properties
+        run: |
+          cat > android/key.properties <<EOF
+          storeFile=release.jks
+          storePassword=${{ secrets.STORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: acchat-release-${{ github.ref_name }}
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 90
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
+          name: ACchat ${{ github.ref_name }}
+          generate_release_notes: true
