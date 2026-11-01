@@ -1,4 +1,4 @@
-package com.example.walkie_talkie
+package com.example.acchat
 
 import io.flutter.embedding.android.FlutterActivity
 

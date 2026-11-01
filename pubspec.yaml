@@ -1,5 +1,5 @@
-name: walkie_talkie
-description: "A new Flutter project."
+name: acchat
+description: "ACchat - Push-to-talk walkie talkie chat app."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -79,6 +79,9 @@ flutter:
     - family: RetroFont
       fonts:
         - asset: assets/fonts/digital-7.ttf
+    - family: PressStart2P
+      fonts:
+        - asset: assets/fonts/PressStart2P-Regular.ttf
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a
