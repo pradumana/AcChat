@@ -13,9 +13,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   // ponytail: one place to set the server address instead of ~10 hardcoded literals.
-  // Change this (and _wsBase) to point the app at your server before building.
-  static const String _serverBase = 'http://192.168.0.104:8080';
-  static const String _wsBase = 'ws://192.168.0.104:8080';
+  // Change these to your Render URL before building, e.g.:
+  //   static const String _serverBase = 'https://acchat.onrender.com';
+  //   static const String _wsBase     = 'wss://acchat.onrender.com';
+  // For local development use http/ws + your LAN IP.
+  static const String _serverBase = 'https://acchat.onrender.com';
+  static const String _wsBase     = 'wss://acchat.onrender.com';
 
   IOWebSocketChannel? _channel;
   IOWebSocketChannel? _notificationChannel;

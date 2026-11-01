@@ -8,7 +8,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const app = express();
-const port = 8080;
+const port = process.env.PORT || 8080;
 
 // Middleware to parse JSON bodies for HTTP requests
 app.use(express.json());
