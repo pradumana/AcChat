@@ -3,13 +3,13 @@ name: Build APK
 on:
   push:
     branches: [main]
-    tags: ["v*"]          # also runs the release job on version tags
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
-  # DEBUG APK — runs on every push / PR to main
+  # DEBUG APK — every push / PR to main
   # ─────────────────────────────────────────────────────────────────────────────
   build-debug:
     name: Debug APK
@@ -46,24 +46,15 @@ jobs:
           retention-days: 30
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # RELEASE APK — only runs when you push a tag like v1.0.0
+  # RELEASE APK — only on version tags (v1.0.0, v1.1.0, ...)
   #
-  # Required GitHub Secrets (Settings → Secrets and variables → Actions):
+  # One-time setup — add this single secret in your repo:
+  #   Settings → Secrets and variables → Actions → New repository secret
   #
-  #   KEYSTORE_BASE64   base64-encoded .jks keystore
-  #                     Generate:
-  #                       keytool -genkey -v -keystore release.jks \
-  #                         -alias acchat -keyalg RSA -keysize 2048 -validity 10000
-  #                     Encode (Linux/macOS):
-  #                       base64 -w 0 release.jks
-  #                     Encode (Windows PowerShell):
-  #                       [Convert]::ToBase64String([IO.File]::ReadAllBytes("release.jks"))
+  #   Name : KEYSTORE_BASE64
+  #   Value: (contents of d:\android\chat\wavechat\keystore_b64.txt)
   #
-  #   KEY_ALIAS         the alias used above, e.g. acchat
-  #   KEY_PASSWORD      key password
-  #   STORE_PASSWORD    keystore password
-  #
-  # Trigger a release build:
+  # Trigger:
   #   git tag v1.0.0 && git push origin v1.0.0
   # ─────────────────────────────────────────────────────────────────────────────
   build-release:
@@ -97,11 +88,11 @@ jobs:
 
       - name: Write key.properties
         run: |
-          cat > android/key.properties <<EOF
+          cat > android/key.properties << 'EOF'
           storeFile=release.jks
-          storePassword=${{ secrets.STORE_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
+          storePassword=praduman@94
+          keyAlias=acchat
+          keyPassword=praduman@94
           EOF
 
       - name: Build release APK

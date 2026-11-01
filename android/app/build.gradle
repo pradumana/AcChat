@@ -14,9 +14,8 @@ if (keyPropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.walkie_talkie"
+    namespace = "com.example.acchat"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "25.1.8937393"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -39,7 +38,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.walkie_talkie"
+        applicationId = "com.example.acchat"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

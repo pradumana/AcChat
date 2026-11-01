@@ -47,3 +47,5 @@ recordings.json
 android/key.properties
 android/app/release.jks
 android/app/*.jks
+keystore_b64.txt
+release.jks
