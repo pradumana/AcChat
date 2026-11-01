@@ -16,6 +16,7 @@ if (keyPropertiesFile.exists()) {
 android {
     namespace = "com.example.acchat"
     compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -23,7 +24,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17
+        jvmTarget = "17"
     }
 
     signingConfigs {
@@ -49,7 +50,7 @@ android {
         release {
             signingConfig = keyPropertiesFile.exists()
                 ? signingConfigs.release
-                : signingConfigs.debug   // falls back to debug keys if no key.properties
+                : signingConfigs.debug
         }
     }
 }
