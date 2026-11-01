@@ -14,23 +14,23 @@ void main() {
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]).then((_) {
-    runApp(const WalkieTalkieApp());
+    runApp(const ACchatApp());
   });
 }
 
-class WalkieTalkieApp extends StatelessWidget {
-  const WalkieTalkieApp({super.key});
+class ACchatApp extends StatelessWidget {
+  const ACchatApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Walkie Talkie',
+      title: 'ACchat',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
         fontFamily: 'RetroFont',
       ),
-      home: const WalkieTalkieHome(),
+      home: const ACchatHome(),
     );
   }
 }

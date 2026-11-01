@@ -12,9 +12,15 @@ import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
+  // ponytail: one place to set the server address instead of ~10 hardcoded literals.
+  // Change this (and _wsBase) to point the app at your server before building.
+  static const String _serverBase = 'http://192.168.0.104:8080';
+  static const String _wsBase = 'ws://192.168.0.104:8080';
+
   IOWebSocketChannel? _channel;
   IOWebSocketChannel? _notificationChannel;
   final FlutterSoundPlayer _player = FlutterSoundPlayer();
+  final FlutterSoundPlayer _clipPlayer = FlutterSoundPlayer(); // for replaying recordings
   bool isFeedingAudio = false;
 
   String? userId;
@@ -42,7 +48,7 @@ class ApiService {
   void startHeartbeat() {
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       try {
-        final response = await http.get(Uri.parse('http://192.168.0.104:8080/heartbeat'));
+        final response = await http.get(Uri.parse('$_serverBase/heartbeat'));
         if (response.statusCode == 200) {
           if (!_isServerOnline) {
             _isServerOnline = true;
@@ -73,6 +79,7 @@ class ApiService {
   Future<void> _initializeAudio() async {
     try {
       await _player.openPlayer();
+      await _clipPlayer.openPlayer();
     } catch (e) {
       Logger.log("Error initializing audio player: $e");
     }
@@ -81,7 +88,7 @@ class ApiService {
   Future<void> connectToNotificationWebSocket() async {
     try {
       _notificationChannel = IOWebSocketChannel.connect(
-        Uri.parse('ws://192.168.0.104:8080/ws/notifications'),
+        Uri.parse('$_wsBase/ws/notifications'),
       );
 
       _notificationChannel!.sink.add(json.encode({
@@ -123,7 +130,7 @@ class ApiService {
     try {
       _channel = IOWebSocketChannel.connect(
         Uri.parse(
-            'ws://192.168.0.104:8080/ws/audio/${Uri.encodeComponent(channel)}/${Uri.encodeComponent(userId!)}'),
+            '$_wsBase/ws/audio/${Uri.encodeComponent(channel)}/${Uri.encodeComponent(userId!)}'),
       );
 
       _channel!.stream.listen(
@@ -144,6 +151,10 @@ class ApiService {
               });
             } else if (decodedMessage['type'] == 'error') {
               Logger.log("Error: ${decodedMessage['message']}");
+            } else {
+              // Forward control frames (notice, kicked, recording_started,
+              // recording_stopped) to the UI via the event stream.
+              _eventController.add(Map<String, dynamic>.from(decodedMessage));
             }
           }
         },
@@ -167,7 +178,7 @@ class ApiService {
   }
 
   void switchChannel(String newChannel) {
-    _isSwitchingChannel = true; 
+    _isSwitchingChannel = true;
     if (_channel != null) {
       _channel!.sink.close();
       _channel = null;
@@ -223,9 +234,9 @@ class ApiService {
   }
 
   void closeWebSocket() {
-    _isManuallyClosed = true; 
+    _isManuallyClosed = true;
     _channel?.sink.close();
-    _channel = null; 
+    _channel = null;
 
     _audioBuffer.clear();
     isFeedingAudio = false;
@@ -234,6 +245,7 @@ class ApiService {
   void dispose() {
     closeWebSocket();
     _player.closePlayer();
+    _clipPlayer.closePlayer();
     _eventController.close();
     _heartbeatTimer?.cancel();
     _notificationChannel?.sink.close();
@@ -245,7 +257,7 @@ class ApiService {
       return [];
     }
     try {
-      final response = await http.get(Uri.parse('http://192.168.0.104:8080/channels?userId=$userId'));
+      final response = await http.get(Uri.parse('$_serverBase/channels?userId=$userId'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return data['channels'];
@@ -268,7 +280,7 @@ class ApiService {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.104:8080/channels'),
+        Uri.parse('$_serverBase/channels'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'channelName': channelName, 'userId': userId}),
       );
@@ -294,7 +306,7 @@ class ApiService {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.104:8080/channels/${Uri.encodeComponent(channelName)}/join'),
+        Uri.parse('$_serverBase/channels/${Uri.encodeComponent(channelName)}/join'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'userId': userId}),
       );
@@ -320,7 +332,7 @@ class ApiService {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.104:8080/channels/${Uri.encodeComponent(channelName)}/leave'),
+        Uri.parse('$_serverBase/channels/${Uri.encodeComponent(channelName)}/leave'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'userId': userId}),
       );
@@ -346,7 +358,7 @@ class ApiService {
 
     try {
       final response = await http.delete(
-        Uri.parse('http://192.168.0.104:8080/channels/${Uri.encodeComponent(channelName)}'),
+        Uri.parse('$_serverBase/channels/${Uri.encodeComponent(channelName)}'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'userId': userId}),
       );
@@ -366,7 +378,7 @@ class ApiService {
 
   Future<bool> checkServerOnline() async {
     try {
-      final response = await http.get(Uri.parse('http://192.168.0.104:8080/heartbeat'));
+      final response = await http.get(Uri.parse('$_serverBase/heartbeat'));
       if (response.statusCode == 200) {
         return true;
       }
@@ -376,6 +388,207 @@ class ApiService {
     return false;
   }
 
+  // ===========================================================================
+  // Recording + transcript endpoints
+  // ===========================================================================
+
+  Future<bool> startRecording(String channelName) async {
+    if (userId == null) return false;
+    try {
+      final response = await http.post(
+        Uri.parse('$_serverBase/channels/${Uri.encodeComponent(channelName)}/recordings/start'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      Logger.log('Error starting recording: $e');
+      return false;
+    }
+  }
+
+  Future<String?> stopRecording(String channelName) async {
+    if (userId == null) return null;
+    try {
+      final response = await http.post(
+        Uri.parse('$_serverBase/channels/${Uri.encodeComponent(channelName)}/recordings/stop'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': userId}),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['recordingId'];
+      }
+    } catch (e) {
+      Logger.log('Error stopping recording: $e');
+    }
+    return null;
+  }
+
+  /// Returns { 'recordings': [...], 'recording': bool } or null on error.
+  Future<Map<String, dynamic>?> fetchRecordings(String channelName) async {
+    if (userId == null) return null;
+    try {
+      final response = await http
+          .get(Uri.parse('$_serverBase/channels/${Uri.encodeComponent(channelName)}/recordings?userId=$userId'));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (e) {
+      Logger.log('Error fetching recordings: $e');
+    }
+    return null;
+  }
+
+  String recordingAudioUrl(String recordingId) {
+    return '$_serverBase/recordings/$recordingId/audio?userId=$userId';
+  }
+
+  Future<String?> fetchTranscript(String recordingId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_serverBase/recordings/$recordingId/transcript?userId=$userId'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['transcript'] as String?;
+      }
+    } catch (e) {
+      Logger.log('Error fetching transcript: $e');
+    }
+    return null;
+  }
+
+  Future<String?> transcribeRecording(String recordingId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_serverBase/recordings/$recordingId/transcribe'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': userId}),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['transcript'] as String?;
+      } else {
+        final data = json.decode(response.body);
+        Logger.log('Transcribe failed: ${data['message']}');
+      }
+    } catch (e) {
+      Logger.log('Error transcribing recording: $e');
+    }
+    return null;
+  }
+
+  Future<bool> deleteRecording(String recordingId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$_serverBase/recordings/$recordingId'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': userId}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      Logger.log('Error deleting recording: $e');
+      return false;
+    }
+  }
+
+  // ===========================================================================
+  // Host / admin endpoints
+  // ===========================================================================
+
+  Future<Map<String, dynamic>?> fetchMembers(String channelName) async {
+    if (userId == null) return null;
+    try {
+      final response = await http.get(
+        Uri.parse('$_serverBase/channels/${Uri.encodeComponent(channelName)}/members?userId=$userId'),
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (e) {
+      Logger.log('Error fetching members: $e');
+    }
+    return null;
+  }
+
+  Future<List<dynamic>> fetchConnectedClients(String channelName) async {
+    if (userId == null) return [];
+    try {
+      final response = await http.get(
+        Uri.parse('$_serverBase/channels/${Uri.encodeComponent(channelName)}/clients?userId=$userId'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['clients'] ?? [];
+      }
+    } catch (e) {
+      Logger.log('Error fetching connected clients: $e');
+    }
+    return [];
+  }
+
+  Future<bool> kickMember(String channelName, String targetUserId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_serverBase/channels/${Uri.encodeComponent(channelName)}/kick'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': userId, 'targetUserId': targetUserId}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      Logger.log('Error kicking member: $e');
+      return false;
+    }
+  }
+
+  Future<bool> broadcastNotice(String channelName, String message) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_serverBase/channels/${Uri.encodeComponent(channelName)}/broadcast'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': userId, 'message': message}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      Logger.log('Error broadcasting notice: $e');
+      return false;
+    }
+  }
+
+  // ===========================================================================
+  // Recording playback (separate player so it never clobbers the live stream)
+  // ===========================================================================
+
+  Future<void> playRecording(String url) async {
+    try {
+      if (_clipPlayer.isPlaying) {
+        await _clipPlayer.stopPlayer();
+      }
+      final bytes = await http.readBytes(Uri.parse(url));
+      await _clipPlayer.startPlayer(
+        fromDataBuffer: bytes,
+        codec: Codec.pcm16WAV,
+        whenFinished: () {
+          Logger.log('Recording playback finished');
+        },
+      );
+    } catch (e) {
+      Logger.log('Error playing recording: $e');
+    }
+  }
+
+  Future<void> stopPlayback() async {
+    try {
+      if (_clipPlayer.isPlaying) {
+        await _clipPlayer.stopPlayer();
+      }
+    } catch (e) {
+      Logger.log('Error stopping playback: $e');
+    }
+  }
+
   bool get isServerOnline => _isServerOnline;
   bool get isSwitchingChannel => _isSwitchingChannel;
+  bool get isClipPlaying => _clipPlayer.isPlaying;
 }

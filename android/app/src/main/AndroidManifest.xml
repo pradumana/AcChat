@@ -2,7 +2,7 @@
     xmlns:tools="http://schemas.android.com/tools">  <!-- Add this line -->
 
     <application
-        android:label="walkie_talkie"
+        android:label="ACchat"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         tools:replace="android:icon, android:label">  <!-- Add this attribute -->

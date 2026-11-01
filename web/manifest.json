@@ -1,11 +1,11 @@
 {
-    "name": "walkie_talkie",
-    "short_name": "walkie_talkie",
+    "name": "ACchat",
+    "short_name": "ACchat",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "ACchat - real-time walkie-talkie voice chat.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

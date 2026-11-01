@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "walkie_talkie" "\0"
+            VALUE "FileDescription", "ACchat" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "walkie_talkie" "\0"
+            VALUE "InternalName", "ACchat" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2024 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "walkie_talkie.exe" "\0"
-            VALUE "ProductName", "walkie_talkie" "\0"
+            VALUE "OriginalFilename", "ACchat.exe" "\0"
+            VALUE "ProductName", "ACchat" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

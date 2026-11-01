@@ -53,14 +53,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 ===============================================================================
 */
 
-class WalkieTalkieHome extends StatefulWidget {
-  const WalkieTalkieHome({super.key});
+class ACchatHome extends StatefulWidget {
+  const ACchatHome({super.key});
 
   @override
-  State<WalkieTalkieHome> createState() => _WalkieTalkieHomeState();
+  State<ACchatHome> createState() => _ACchatHomeState();
 }
 
-class _WalkieTalkieHomeState extends State<WalkieTalkieHome> {
+class _ACchatHomeState extends State<ACchatHome> {
 
   // ============================================================================
   //                                    VARIABLES
@@ -287,6 +287,17 @@ class _WalkieTalkieHomeState extends State<WalkieTalkieHome> {
             isConnected = false;
           });
         }
+      } else if (event['type'] == 'notice') {
+        _showSnackBar('Host: ${event['message'] ?? ''}');
+      } else if (event['type'] == 'kicked') {
+        _showSnackBar('You were removed from the channel.');
+        setState(() {
+          isConnected = false;
+        });
+      } else if (event['type'] == 'recording_started') {
+        _showSnackBar('Recording started on this channel.');
+      } else if (event['type'] == 'recording_stopped') {
+        _showSnackBar('Recording saved.');
       } else if (event['type'] == 'server_offline') {
         _showSnackBar('Server is offline.');
         setState(() {
@@ -745,6 +756,23 @@ class _WalkieTalkieHomeState extends State<WalkieTalkieHome> {
                   _showManageChannelsDialog();
                 },
               ),
+              _DialogOption(
+                icon: Icons.mic,
+                text: 'Recordings',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showRecordingsDialog();
+                },
+              ),
+              if (_isCurrentChannelHost())
+                _DialogOption(
+                  icon: Icons.admin_panel_settings,
+                  text: 'Admin Panel',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showAdminPanelDialog();
+                  },
+                ),
             ],
           ),
         );
@@ -932,6 +960,339 @@ class _WalkieTalkieHomeState extends State<WalkieTalkieHome> {
             ),
           );
         },
+      ),
+      iconVerticalOffset: 1.0,
+    );
+  }
+
+  String get _currentChannelName {
+    if (channelsNotifier.value.isEmpty ||
+        channelIndex < 0 ||
+        channelIndex >= channelsNotifier.value.length) {
+      return '';
+    }
+    return channelsNotifier.value[channelIndex]['name'] as String;
+  }
+
+  bool _isCurrentChannelHost() {
+    if (channelsNotifier.value.isEmpty ||
+        channelIndex < 0 ||
+        channelIndex >= channelsNotifier.value.length) {
+      return false;
+    }
+    return channelsNotifier.value[channelIndex]['creatorId'] == _apiService.userId;
+  }
+
+  // ===========================================================================
+  // RECORDINGS
+  // ===========================================================================
+  // View saved voice notes + transcripts for the current channel. The host can
+  // start/stop recording and delete; all members can play, view transcripts,
+  // and trigger transcription. Recordings are saved server-side and stay
+  // available to both parties at any time.
+
+  void _showRecordingsDialog() {
+    final channelName = _currentChannelName;
+    if (channelName.isEmpty) {
+      _showSnackBar('No channel selected.');
+      return;
+    }
+
+    _showCustomDialog(
+      title: 'Recordings',
+      icon: Icons.mic,
+      content: FutureBuilder<Map<String, dynamic>?>(
+        future: _apiService.fetchRecordings(channelName),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          }
+          final data = snapshot.data;
+          final List recordings =
+              data != null ? (data['recordings'] ?? []) as List : [];
+          final bool recording = data != null ? data['recording'] == true : false;
+          final bool isHost = _isCurrentChannelHost();
+
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.55,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isHost)
+                  _RecordingControlRow(
+                    isRecording: recording,
+                    onStart: () async {
+                      final nav = Navigator.of(context);
+                      final ok = await _apiService.startRecording(channelName);
+                      if (!mounted) return;
+                      nav.pop();
+                      _showSnackBar(
+                          ok ? 'Recording started.' : 'Failed to start recording.');
+                      if (ok) _showRecordingsDialog();
+                    },
+                    onStop: () async {
+                      final nav = Navigator.of(context);
+                      final id = await _apiService.stopRecording(channelName);
+                      if (!mounted) return;
+                      nav.pop();
+                      _showSnackBar(
+                          id != null ? 'Recording saved.' : 'Failed to stop recording.');
+                      _showRecordingsDialog();
+                    },
+                  ),
+                if (recordings.isEmpty && !recording)
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(
+                      'No recordings yet.',
+                      style: _textStyle.copyWith(color: Colors.white70),
+                    ),
+                  ),
+                if (recordings.isNotEmpty)
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: recordings.length,
+                      itemBuilder: (context, index) {
+                        final rec = recordings[index];
+                        return _RecordingCard(
+                          recording: rec,
+                          onPlay: () => _apiService.playRecording(
+                              _apiService.recordingAudioUrl(rec['id'])),
+                          onStop: () => _apiService.stopPlayback(),
+                          onTranscript: () =>
+                              _showTranscriptDialog(rec['id'], rec['hasTranscript'] == true),
+                          onDelete: () async {
+                            final nav = Navigator.of(context);
+                            final ok = await _apiService.deleteRecording(rec['id']);
+                            if (!mounted) return;
+                            nav.pop();
+                            _showSnackBar(
+                                ok ? 'Recording deleted.' : 'Failed to delete.');
+                            _showRecordingsDialog();
+                          },
+                          canDelete: isHost,
+                        );
+                      },
+                    ),
+                  ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _DialogButton(
+                      icon: Icons.arrow_back,
+                      onTap: () async {
+                        final nav = Navigator.of(context);
+                        await _apiService.stopPlayback();
+                        if (!mounted) return;
+                        nav.pop();
+                        _showChannelOptionsDialog();
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+      iconVerticalOffset: 1.0,
+    );
+  }
+
+  void _showTranscriptDialog(String recordingId, bool hasTranscript) {
+    _showCustomDialog(
+      title: 'Transcript',
+      icon: Icons.description,
+      content: FutureBuilder<String?>(
+        future: _apiService.fetchTranscript(recordingId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          }
+          final text = snapshot.data ?? '';
+          return ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (text.isNotEmpty)
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: SelectableText(text, style: _textStyle),
+                    ),
+                  ),
+                if (text.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(
+                      'No transcript yet. Tap the wand to transcribe.',
+                      style: _textStyle.copyWith(color: Colors.white70),
+                    ),
+                  ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _DialogButton(
+                      icon: Icons.auto_fix_high,
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        _showSnackBar('Transcribing... this may take a moment.');
+                        final t = await _apiService.transcribeRecording(recordingId);
+                        if (!mounted) return;
+                        if (t != null) {
+                          _showTranscriptDialog(recordingId, true);
+                        } else {
+                          _showSnackBar(
+                              'Transcription failed. Is OPENAI_API_KEY set on the server?');
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 10),
+                    _DialogButton(
+                      icon: Icons.arrow_back,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _showRecordingsDialog();
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+      iconVerticalOffset: 1.0,
+    );
+  }
+
+  // ===========================================================================
+  // ADMIN PANEL (host only)
+  // ===========================================================================
+  // The channel creator can view members + connected clients, kick a member,
+  // and broadcast a notice to the whole channel.
+
+  void _showAdminPanelDialog() async {
+    final channelName = _currentChannelName;
+    if (channelName.isEmpty) return;
+    if (!_isCurrentChannelHost()) {
+      _showSnackBar('Only the host can open the admin panel.');
+      return;
+    }
+
+    final membersData = await _apiService.fetchMembers(channelName);
+    final connected = await _apiService.fetchConnectedClients(channelName);
+    if (!mounted) return;
+
+    final List members =
+        membersData != null ? (membersData['members'] ?? []) as List : [];
+    final String? creatorId =
+        membersData != null ? membersData['creatorId'] as String? : null;
+    final Set<String> connectedIds =
+        connected.map((c) => c['userId'] as String).toSet();
+
+    String notice = '';
+
+    _showCustomDialog(
+      title: 'Admin Panel',
+      icon: Icons.admin_panel_settings,
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.6,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Channel: $channelName', style: _textStyle),
+            const SizedBox(height: 10),
+            Text('Members (${members.length})',
+                style: _textStyle.copyWith(color: Colors.white70, fontSize: 14)),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: members.length,
+                itemBuilder: (context, index) {
+                  final m = members[index] as String;
+                  return _MemberTile(
+                    userId: m,
+                    isCreator: m == creatorId,
+                    online: connectedIds.contains(m),
+                    isSelf: m == _apiService.userId,
+                    onKick: (m == creatorId)
+                        ? null
+                        : () async {
+                            final nav = Navigator.of(context);
+                            final ok = await _apiService.kickMember(channelName, m);
+                            if (!mounted) return;
+                            _showSnackBar(
+                                ok ? 'Member removed.' : 'Failed to remove member.');
+                            if (ok) {
+                              nav.pop();
+                              _showAdminPanelDialog();
+                            }
+                          },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text('Broadcast notice',
+                style: _textStyle.copyWith(color: Colors.white70, fontSize: 14)),
+            TextField(
+              onChanged: (v) => notice = v,
+              style: _textStyle,
+              decoration: InputDecoration(
+                hintText: 'Message to the channel',
+                hintStyle: _textStyle.copyWith(color: Colors.white54),
+                enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white.withOpacity(0.5))),
+                focusedBorder:
+                    const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _DialogButton(
+                  icon: Icons.send,
+                  onTap: () async {
+                    if (notice.trim().isEmpty) {
+                      _showSnackBar('Notice cannot be empty.');
+                      return;
+                    }
+                    final ok =
+                        await _apiService.broadcastNotice(channelName, notice.trim());
+                    if (!mounted) return;
+                    _showSnackBar(ok ? 'Notice sent.' : 'Failed to send notice.');
+                  },
+                ),
+                const SizedBox(width: 10),
+                _DialogButton(
+                  icon: Icons.arrow_back,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showChannelOptionsDialog();
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
       iconVerticalOffset: 1.0,
     );
@@ -1254,6 +1615,178 @@ class _ChannelCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// Recording control row (start/stop) shown to the host.
+class _RecordingControlRow extends StatelessWidget {
+  final bool isRecording;
+  final VoidCallback onStart;
+  final VoidCallback onStop;
+
+  const _RecordingControlRow({
+    required this.isRecording,
+    required this.onStart,
+    required this.onStop,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ElevatedButton(
+            onPressed: isRecording ? null : onStart,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Start Recording'),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton(
+            onPressed: isRecording ? onStop : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Stop'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// One saved recording: play/stop, view transcript, delete (host).
+class _RecordingCard extends StatelessWidget {
+  final dynamic recording;
+  final VoidCallback onPlay;
+  final VoidCallback onStop;
+  final VoidCallback onTranscript;
+  final VoidCallback onDelete;
+  final bool canDelete;
+
+  const _RecordingCard({
+    required this.recording,
+    required this.onPlay,
+    required this.onStop,
+    required this.onTranscript,
+    required this.onDelete,
+    required this.canDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ts = DateTime.fromMillisecondsSinceEpoch(recording['createdAt'] ?? 0);
+    final dur = Duration(milliseconds: recording['durationMs'] ?? 0);
+    final durStr =
+        '${dur.inMinutes}:${(dur.inSeconds % 60).toString().padLeft(2, '0')}';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.white24),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.play_arrow, color: Colors.white),
+            onPressed: onPlay,
+          ),
+          IconButton(
+            icon: const Icon(Icons.stop, color: Colors.white),
+            onPressed: onStop,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ts.toLocal().toString().substring(0, 19),
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 14, fontFamily: 'RetroFont'),
+                ),
+                Text(
+                  durStr,
+                  style: const TextStyle(
+                      color: Colors.white54, fontSize: 12, fontFamily: 'RetroFont'),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.description, color: Colors.white),
+            onPressed: onTranscript,
+          ),
+          if (canDelete)
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.white),
+              onPressed: onDelete,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// One channel member row in the admin panel.
+class _MemberTile extends StatelessWidget {
+  final String userId;
+  final bool isCreator;
+  final bool online;
+  final bool isSelf;
+  final VoidCallback? onKick;
+
+  const _MemberTile({
+    required this.userId,
+    required this.isCreator,
+    required this.online,
+    required this.isSelf,
+    this.onKick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.white24),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Icon(
+            online ? Icons.circle : Icons.circle_outlined,
+            color: online ? Colors.greenAccent : Colors.white54,
+            size: 12,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              userId.substring(0, 8) +
+                  (isSelf ? ' (you)' : '') +
+                  (isCreator ? ' [host]' : ''),
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 14, fontFamily: 'RetroFont'),
+            ),
+          ),
+          if (onKick != null)
+            IconButton(
+              icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
+              onPressed: onKick,
+            ),
+        ],
       ),
     );
   }

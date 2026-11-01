@@ -1,82 +1,66 @@
-# WaveChat - Real-Time Voice Messaging App
-
-[**Download the latest APK here**](https://github.com/shev0k/wavechat/releases)
+# ACchat - Real-Time Voice Messaging App
 
 ## Overview
 
-**WaveChat** is an instant voice messaging app designed to replicate the simplicity and fun of classic walkie-talkies. It allows users to join dynamic channels, communicate with friends in real-time, and experience a seamless, live audio connection with a sleek, retro-styled interface. Whether you're coordinating in real-time or sharing spontaneous moments, WaveChat ensures instant and immersive communication.
-
-![WaveChat App Preview](https://raw.githubusercontent.com/shev0k/wavechat/refs/heads/Features/images/WaveChatV2.png)
+**ACchat** is an instant voice messaging app that replicates the simplicity and fun of classic walkie-talkies. Users join dynamic channels and communicate with friends in real-time over a live audio connection, with a sleek retro-styled interface. Beyond live talk, ACchat records conversations so both parties can replay voice notes or read a transcript later, and channel hosts get an admin panel to manage their room.
 
 ## Key Features
 
-- **Real-Time Voice Communication**: Instantly speak to other users on the same channel with no delay. Press to talk and release to listen, just like a traditional walkie-talkie.
-  
-- **Dynamic Channel Management**: Create, join, leave, and delete channels on the fly. No longer limited to three channels, WaveChat supports an unlimited number of channels to accommodate your communication needs.
-
-- **Channel-Based Interaction**: Easily switch between multiple channels, ensuring you stay connected with the right group at the right time.
-
-- **Simple, Minimalist Interface**: A sleek, black-and-white interface inspired by retro walkie-talkies keeps the focus on the conversation, with tactile feedback and responsive controls.
-
-- **Hold-to-Talk**: Hold down the hold-to-talk button to broadcast your voice. Let go when done to allow others to speak, ensuring natural, walkie-talkie-style communication.
-
-- **Persistent Channel Selection**: WaveChat remembers your last selected channel, allowing you to seamlessly reconnect without the hassle of reselecting each time.
-
-- **Robust Server Connectivity**: Enhanced handling of server status changes, including automatic reconnection and user notifications when the server goes offline or comes back online.
-
-- **User-Friendly Channel Options**: Access comprehensive channel options through intuitive dialogs, making it easy to manage your communication channels effectively.
-
-![WaveChat App Preview](https://raw.githubusercontent.com/shev0k/wavechat/refs/heads/Features/images/WaveChatV3.png)
+- **Real-Time Voice Communication**: Hold the talk button to broadcast; release to listen, walkie-talkie style.
+- **Dynamic Channel Management**: Create, join, leave, and delete channels on the fly.
+- **Conversation Recording (new)**: The host can start/stop a recording for a channel. The session is saved server-side as a playable voice note and, optionally, transcribed to a text document. Both parties (channel members) can open, play, and read recordings at any time.
+- **Host Admin Panel (new)**: Channel creators get a panel listing members, currently connected clients, with the ability to kick a member and broadcast a notice to the whole channel.
+- **Persistent Channel Selection**: ACchat remembers your last selected channel.
+- **Robust Server Connectivity**: Heartbeat-based online/offline detection with automatic reconnection.
 
 ## Technology Stack
 
-- **Frontend**: Developed using **Flutter** for smooth cross-platform performance on both iOS and Android devices.
-  
-- **Backend**: Built on **Node.js** with **WebSocket** technology, enabling low-latency, real-time audio streaming across multiple channels.
-
-- **Audio Streaming**: Powered by **Flutter Sound** for high-quality, real-time voice communication, ensuring that your voice is transmitted with minimal delay.
-
-## Target Audience
-
-- **Primary Users**: Teams, friends, and event organizers who need instant, walkie-talkie-style communication with the flexibility of managing multiple channels.
-
-- **Secondary Users**: Individuals seeking a minimalistic, distraction-free communication app with a retro aesthetic and real-time functionality.
-
-- **Casual Users**: Anyone who enjoys nostalgic experiences and simple, efficient voice messaging.
+- **Frontend**: Flutter (cross-platform, Android/iOS/web/desktop).
+- **Backend**: Node.js + Express + `ws` WebSocket for low-latency real-time audio. Recordings are persisted as WAV; transcription is opt-in via the OpenAI Whisper API (set `OPENAI_API_KEY`).
 
 ## Installation
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/shev0k/wavechat.git
-   ```
-
-2. Install dependencies:
+1. Clone the repository.
+2. Install Flutter dependencies:
    ```bash
    flutter pub get
    ```
-
-3. Run the app:
+3. Install server dependencies:
+   ```bash
+   npm install
+   ```
+4. Run the server:
+   ```bash
+   node server.js
+   ```
+5. Run the app:
    ```bash
    flutter run
    ```
 
+> The app connects to the server address configured in `lib/services/api_service.dart` (`_serverBase`). Point it at your server's address before building.
+
+### Transcription (optional)
+
+Set an OpenAI API key on the server to enable "Transcribe" on recordings:
+```bash
+OPENAI_API_KEY=sk-... node server.js
+```
+Without a key, voice-note saving and playback still work; only transcription is unavailable.
+
 ## Usage
 
-1. **Launch WaveChat** on your device.
-2. **Grant microphone permissions** when prompted to enable voice communication.
-3. **Select a channel** from the list of available channels or create a new one.
-4. **Press and hold the Hold-to-Talk button** to speak. Release to listen.
-5. **Manage your channels** by creating, joining, leaving, or deleting channels through the channel options menu.
+1. Launch ACchat and grant microphone permission.
+2. Select or create a channel.
+3. Hold the talk button to speak; release to listen.
+4. Open Channel Options to view/record conversations or, if you are the host, open the Admin Panel.
 
 ## Future Enhancements
 
-- **Additional Customization**: Allow users to customize channels and their interface with personalized themes or notifications.
-- **Enhanced Security**: Implement end-to-end encryption for voice messages to ensure secure communication.
-- **Advanced User Management**: Introduce roles and permissions within channels for better control and organization.
-- **Cross-Platform Support**: Expand support to web and desktop platforms for broader accessibility.
-
+- End-to-end encryption for voice.
+- Configurable server address in-app.
+- Roles and permissions beyond host/member.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT.
